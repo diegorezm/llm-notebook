@@ -1,5 +1,22 @@
 /* @refresh reload */
 import { render } from "solid-js/web";
-import App from "./App";
+import { Route, Router } from "@solidjs/router";
+import { HomeRoute } from "./routes/home";
+import { AppLayout } from "./components/layouts/app-layout";
 
-render(() => <App />, document.getElementById("root") as HTMLElement);
+const wrapper = document.getElementById("root");
+
+if (!wrapper) {
+  throw new Error("Wrapper div not found");
+}
+
+render(
+  () => (
+    <Router>
+      <Route path="/" component={AppLayout}>
+        <Route path="/" component={HomeRoute} />
+      </Route>
+    </Router>
+  ),
+  wrapper,
+);

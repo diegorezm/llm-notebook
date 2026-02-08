@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+    themes: "black";
+}
+
+a:hover,
+button:hover {
+    cursor: pointer;
+}
+
+html,
+body {
+    font-family: "Inter", sans-serif;
+    letter-spacing: -0.015em; /* Inter looks best slightly tight */
+    line-height: 1.5;
+
+    /* SMOOTHING: Essential for light text on black */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
