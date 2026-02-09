@@ -6,14 +6,14 @@ import {
 } from "../../lib/commands";
 import { ChevronRight, Plus, Trash2 } from "lucide-solid";
 import { showToast } from "../../lib/toast";
+import { A, useNavigate } from "@solidjs/router";
 
 export function NotebooksGrid() {
+  const navigation = useNavigate();
+
   const [notebooks, { refetch }] = createResource(async () => {
     const [err, notebooks] = await getNotebooks();
     if (err) throw new Error(err.reason);
-    showToast({
-      message: "testing",
-    });
     return notebooks;
   });
 
@@ -31,7 +31,7 @@ export function NotebooksGrid() {
   const handleCreate = async () => {
     const title = prompt("Enter notebook title:") || "Untitled Notebook";
 
-    const [err, newNb] = await createNotebook(title);
+    const [err] = await createNotebook(title);
 
     if (err) {
       // You could use a toast here later
@@ -102,15 +102,16 @@ export function NotebooksGrid() {
                     </p>
                     <div class="card-actions justify-end mt-4">
                       <button
-                        class="btn btn-error btn-xs text-zinc-500  no-animation p-0 text-[10px] tracking-widest"
+                        class="btn btn-outline btn-error btn-xs  no-animation  text-[10px] tracking-widest"
                         onClick={() => handleDelete(nb.id)}
                       >
                         DELETE <Trash2 class="size-3" />
                       </button>
-
-                      <button class="btn btn-ghost btn-xs text-zinc-600 hover:text-white no-animation p-0 text-[10px] tracking-widest">
-                        OPEN <ChevronRight class="size-3" />
-                      </button>
+                      <A href={`/notebook/${nb.id}`}>
+                        <button class="btn btn-ghost btn-outline btn-xs text-zinc-600 hover:text-white no-animation text-[10px] tracking-widest">
+                          OPEN <ChevronRight class="size-3" />
+                        </button>
+                      </A>
                     </div>
                   </div>
                 </div>

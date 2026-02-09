@@ -1,26 +1,10 @@
-import { ChevronRight, Plus, FileUp, MessageSquare } from "lucide-solid";
-import { createSignal, For } from "solid-js";
+import { FileUp } from "lucide-solid";
+import { createSignal } from "solid-js";
 import { NotebooksGrid } from "../components/notebooks/grid";
 
 export function HomeRoute() {
   const [isDragging, setIsDragging] = createSignal(false);
-  const [message, setMessage] = createSignal("");
-  const [notebooks, setNotebooks] = createSignal([
-    {
-      id: 1,
-      title: "Next.js Architecture",
-      date: "Feb 08",
-      snippet: "Discussing server components...",
-    },
-    {
-      id: 2,
-      title: "Rust Backend Logic",
-      date: "Feb 07",
-      snippet: "Context regarding Mutex patterns...",
-    },
-  ]);
 
-  // Handlers for the Drop Zone
   const onDragOver = (e: DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -34,14 +18,7 @@ export function HomeRoute() {
     const files = e.dataTransfer?.files;
     if (files && files.length > 0) {
       console.log("Files dropped:", files[0].name);
-      // Logic to create a new notebook with this file's content
     }
-  };
-
-  const handleSend = () => {
-    if (!message().trim()) return;
-    console.log("New session with message:", message());
-    setMessage("");
   };
 
   return (
