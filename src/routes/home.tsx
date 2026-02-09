@@ -1,5 +1,6 @@
 import { ChevronRight, Plus, FileUp, MessageSquare } from "lucide-solid";
 import { createSignal, For } from "solid-js";
+import { NotebooksGrid } from "../components/notebooks/grid";
 
 export function HomeRoute() {
   const [isDragging, setIsDragging] = createSignal(false);
@@ -77,86 +78,9 @@ export function HomeRoute() {
               </p>
             </div>
           </div>
-
-          {/* Message Input */}
-          <div class="relative group">
-            <input
-              type="text"
-              value={message()}
-              onInput={(e) => setMessage(e.currentTarget.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Or start a conversation with a question..."
-              class="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-zinc-500 transition-colors placeholder:text-zinc-600 text-sm"
-            />
-            <MessageSquare
-              class="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-zinc-400 transition-colors"
-              size={18}
-            />
-            <div class="absolute right-3 top-1/2 -translate-y-1/2">
-              <button
-                onClick={handleSend}
-                class="btn btn-ghost btn-xs text-zinc-500 hover:text-white"
-              >
-                Press ↵
-              </button>
-            </div>
-          </div>
         </section>
 
-        {/* Header */}
-        <header class="mb-8 flex justify-between items-end">
-          <div>
-            <h2 class="text-2xl font-light tracking-tighter">
-              RECENT NOTEBOOKS
-            </h2>
-          </div>
-          <div class="text-zinc-600 text-[10px] font-mono uppercase tracking-widest leading-none">
-            {notebooks().length} Persistent Units
-          </div>
-        </header>
-
-        {/* Grid */}
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Create New Card (Simplified as requested) */}
-          <button
-            class="card border border-zinc-800 hover:border-zinc-400 bg-zinc-900/30 transition-all duration-300 group min-h-[180px]"
-            onClick={() => console.log("New Session")}
-          >
-            <div class="card-body items-center justify-center text-center">
-              <div class="w-10 h-10 rounded-full border border-zinc-700 flex items-center justify-center group-hover:bg-white group-hover:text-black transition-all">
-                <Plus size={20} />
-              </div>
-              <p class="text-zinc-500 group-hover:text-zinc-200 mt-3 text-[10px] font-medium uppercase tracking-widest">
-                Blank Notebook
-              </p>
-            </div>
-          </button>
-
-          <For each={notebooks()}>
-            {(nb) => (
-              <div class="card border border-zinc-800 bg-black hover:bg-zinc-900/20 transition-all duration-300 group cursor-pointer">
-                <div class="card-body p-6">
-                  <div class="flex justify-between items-start">
-                    <h2 class="card-title text-zinc-100 font-normal text-base group-hover:text-white">
-                      {nb.title}
-                    </h2>
-                    <span class="text-[9px] text-zinc-600 font-mono">
-                      {nb.date}
-                    </span>
-                  </div>
-                  <p class="text-zinc-500 text-xs line-clamp-2 mt-2 leading-relaxed italic">
-                    {nb.snippet}
-                  </p>
-                  <div class="card-actions justify-end mt-4">
-                    <button class="btn btn-ghost btn-xs text-zinc-600 hover:text-white no-animation p-0 text-[10px] tracking-widest">
-                      OPEN <ChevronRight class="size-3" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </For>
-        </div>
+        <NotebooksGrid />
       </div>
     </div>
   );
