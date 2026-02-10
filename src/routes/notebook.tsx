@@ -2,9 +2,22 @@ import { useParams } from "@solidjs/router";
 import { ResizableSidebar } from "../components/notebook/file-sidebar";
 import { ChatMessage } from "../components/notebook/chat-message";
 import { ChatInput } from "../components/notebook/chat-input";
+import { createResource, For, Show } from "solid-js";
+import { getChatHistory } from "../lib/commands"; // Ensure this path matches your bindings
 
 export function NotebookRoute() {
   const params = useParams<{ id: string }>();
+
+  // 1. Fetch chat history whenever the ID changes
+  const [chatHistory, { refetch }] = createResource(
+    () => params.id,
+    async (id) => {
+      const [err, data] = await getChatHistory(id);
+      if (err) throw err; // This will trigger the .error state below
+      return data;
+    },
+  );
+
   return (
     <div class="flex h-screen bg-black text-zinc-100 overflow-hidden">
       <ResizableSidebar />
@@ -21,13 +34,49 @@ export function NotebookRoute() {
         </header>
 
         <div class="flex-1 overflow-y-auto p-6 space-y-8 max-w-4xl mx-auto w-full">
-          <ChatMessage
-            role="assistant"
-            content="Hello! I've indexed your files."
-          />
+          {/* 2. Error Handling */}
+          <Show when={chatHistory.error}>
+            <div class="alert alert-error bg-red-950/20 border-red-900 text-red-200 rounded-sm text-xs">
+              <span>Error loading history: {chatHistory.error.reason}</span>
+            </div>
+          </Show>
+
+          {/* 3. Loading State (Skeletons) */}
+          <Show when={chatHistory.loading}>
+            <div class="space-y-6 animate-pulse">
+              <div class="h-4 bg-zinc-900 rounded w-3/4"></div>
+              <div class="h-4 bg-zinc-900 rounded w-1/2"></div>
+            </div>
+          </Show>
+
+          {/* 4. Chat Messages List */}
+          <Show when={chatHistory()}>
+            <For each={chatHistory()}>
+              {(msg) => (
+                <ChatMessage
+                  role={msg.role as "user" | "assistant"}
+                  content={msg.message}
+                />
+              )}
+            </For>
+
+            {/* Default welcome if the notebook is brand new */}
+            <Show when={chatHistory()!.length === 0}>
+              <ChatMessage
+                role="assistant"
+                content="Hello! I've indexed your files. Ask anything about your documents."
+              />
+            </Show>
+          </Show>
         </div>
 
-        <ChatInput onSend={(msg) => console.log("Sending:", msg)} />
+        {/* 5. Input handles sending logic */}
+        <ChatInput
+          onSend={(msg) => {
+            console.log("Sending:", msg);
+            // We'll hook up the actual Rust sendMessage command here next!
+          }}
+        />
       </main>
     </div>
   );

@@ -6,11 +6,10 @@ import {
 } from "../../lib/commands";
 import { ChevronRight, Plus, Trash2 } from "lucide-solid";
 import { showToast } from "../../lib/toast";
-import { A, useNavigate } from "@solidjs/router";
+import { A } from "@solidjs/router";
+import { confirm } from "@tauri-apps/plugin-dialog";
 
 export function NotebooksGrid() {
-  const navigation = useNavigate();
-
   const [notebooks, { refetch }] = createResource(async () => {
     const [err, notebooks] = await getNotebooks();
     if (err) throw new Error(err.reason);
@@ -44,6 +43,14 @@ export function NotebooksGrid() {
   };
 
   const handleDelete = async (id: string) => {
+    const ok = await confirm("This action cannot be reverted. Are you sure?", {
+      title: "Notebooks",
+      kind: "warning",
+    });
+
+    if (!ok) {
+      return;
+    }
     const [err] = await deleteNotebook(id);
 
     if (err) {
