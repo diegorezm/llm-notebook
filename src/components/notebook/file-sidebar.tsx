@@ -1,8 +1,15 @@
-import { Component, createSignal } from "solid-js";
-import { ArrowLeft, Plus, FileText, CloudUpload } from "lucide-solid";
-import { A } from "@solidjs/router";
+import { Component, createSignal, createResource, For, Show } from "solid-js";
+import { ArrowLeft, Plus, FileText, CloudUpload, Trash2 } from "lucide-solid";
+import { A, useParams } from "@solidjs/router";
+import {
+  getAttachments,
+  uploadFile,
+  deleteAttachment,
+} from "../../lib/commands";
+import { showToast } from "../../lib/toast";
 
 export const ResizableSidebar: Component = () => {
+  const params = useParams<{ id: string }>();
   const [width, setWidth] = createSignal(280);
   let isResizing = false;
 
@@ -15,7 +22,6 @@ export const ResizableSidebar: Component = () => {
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isResizing) return;
-    // Set boundaries (min 200px, max 600px)
     const newWidth = Math.min(Math.max(200, e.clientX), 600);
     setWidth(newWidth);
   };
@@ -30,9 +36,8 @@ export const ResizableSidebar: Component = () => {
   return (
     <div class="flex h-full overflow-hidden">
       <div style={{ width: `${width()}px` }} class="shrink-0">
-        <FileSidebar />
+        <FileSidebar notebookId={params.id} />
       </div>
-
       <div
         onMouseDown={startResizing}
         class="w-1 bg-transparent hover:bg-zinc-700 cursor-col-resize transition-colors z-50 h-full -ml-0.5"
@@ -41,7 +46,40 @@ export const ResizableSidebar: Component = () => {
   );
 };
 
-const FileSidebar: Component = () => {
+const FileSidebar: Component<{ notebookId: string }> = (props) => {
+  // Fetch attachments from SQLite
+  const [attachments, { refetch }] = createResource(
+    () => props.notebookId,
+    async (id) => {
+      const [err, data] = await getAttachments(id);
+      if (err) throw err;
+      console.log(data);
+      return data;
+    },
+  );
+
+  const handleUpload = async () => {
+    const [err, file] = await uploadFile(props.notebookId);
+    if (err) {
+      if (err.reason !== "No file selected") {
+        showToast({ message: err.reason, type: "error" });
+      }
+      return;
+    }
+    showToast({ message: `Uploaded ${file!.file_name}`, type: "success" });
+    refetch();
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Delete ${name}?`)) return;
+    const [err] = await deleteAttachment(id);
+    if (err) {
+      showToast({ message: err.reason, type: "error" });
+    } else {
+      refetch();
+    }
+  };
+
   return (
     <aside class="w-full h-full border-r border-zinc-800 flex flex-col bg-zinc-900/10">
       <div class="p-4 border-b border-zinc-800 flex items-center justify-between">
@@ -54,17 +92,35 @@ const FileSidebar: Component = () => {
         <span class="text-sm font-medium uppercase tracking-widest text-zinc-500">
           Files
         </span>
-        <button class="btn btn-ghost btn-xs text-zinc-400 hover:text-white">
-          <Plus size={16} />
-        </button>
+        <div></div>
       </div>
 
       <div class="flex-1 overflow-y-auto p-2 space-y-1">
-        <FileItem name="physics_notes.pdf" />
+        <Show
+          when={!attachments.loading}
+          fallback={<div class="p-4 text-xs text-zinc-600">Loading...</div>}
+        >
+          <For each={attachments()}>
+            {(file) => (
+              <FileItem
+                name={file.file_name}
+                onDelete={() => handleDelete(file.id, file.file_name)}
+              />
+            )}
+          </For>
+          <Show when={attachments()?.length === 0}>
+            <div class="p-4 text-center text-[10px] text-zinc-600 uppercase tracking-tighter">
+              No files yet
+            </div>
+          </Show>
+        </Show>
       </div>
 
       <div class="p-4 border-t border-zinc-800">
-        <button class="btn btn-outline border-zinc-700 hover:border-zinc-400 hover:bg-transparent text-zinc-400 hover:text-white w-full btn-sm rounded-sm text-[10px] tracking-widest uppercase">
+        <button
+          onClick={handleUpload}
+          class="btn btn-outline border-zinc-700 hover:border-zinc-400 hover:bg-transparent text-zinc-400 hover:text-white w-full btn-sm rounded-sm text-[10px] tracking-widest uppercase"
+        >
           <CloudUpload class="size-4" />
           Upload File
         </button>
@@ -73,11 +129,20 @@ const FileSidebar: Component = () => {
   );
 };
 
-const FileItem: Component<{ name: string }> = (props) => (
+const FileItem: Component<{ name: string; onDelete: () => void }> = (props) => (
   <div class="flex items-center gap-3 p-2 rounded-sm hover:bg-zinc-800/50 cursor-pointer group transition-colors">
     <FileText size={14} class="text-zinc-600 group-hover:text-zinc-300" />
-    <span class="text-xs text-zinc-400 group-hover:text-zinc-200 truncate">
+    <span class="text-xs text-zinc-400 group-hover:text-zinc-200 truncate flex-1">
       {props.name}
     </span>
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        props.onDelete();
+      }}
+      class="p-1 hover:text-red-400 text-zinc-500 transition-all"
+    >
+      <Trash2 size={12} />
+    </button>
   </div>
 );

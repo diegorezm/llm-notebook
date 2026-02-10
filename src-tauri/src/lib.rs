@@ -1,12 +1,8 @@
-use std::{fs::OpenOptions, path::Path};
+use std::fs::OpenOptions;
 
 use tauri::Manager;
 
-use crate::{
-    commands::{create_notebook, get_notebooks, register_commands, send_message},
-    db::db_manager::DBManager,
-    state::AppState,
-};
+use crate::{commands::register_commands, db::db_manager::DBManager, state::AppState};
 
 mod ai;
 mod commands;

@@ -51,6 +51,7 @@ export function NotebooksGrid() {
     if (!ok) {
       return;
     }
+
     const [err] = await deleteNotebook(id);
 
     if (err) {

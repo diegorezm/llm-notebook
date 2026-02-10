@@ -18,14 +18,21 @@ export interface ChatEntry {
   timestamp: number;
 }
 
+export interface Attachment {
+  id: string;
+  notebookId: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  file_type: string;
+  created_at: number;
+}
+
 export interface AppError {
   reason: string;
 }
 
-/**
- * --- Internal Helper ---
- */
-
+// Caller
 async function call<T>(cmd: string, args?: any): Promise<Result<T, AppError>> {
   try {
     const res = await invoke<T>(cmd, args);
@@ -38,10 +45,7 @@ async function call<T>(cmd: string, args?: any): Promise<Result<T, AppError>> {
   }
 }
 
-/**
- * --- Typesafe Command Functions ---
- */
-
+// Tauri commands
 export async function createNotebook(
   title: string,
 ): Promise<Result<Notebook, AppError>> {
@@ -69,4 +73,22 @@ export async function deleteNotebook(
   notebookId: string,
 ): Promise<Result<null, AppError>> {
   return call<null>("delete_notebook", { notebookId });
+}
+
+export async function getAttachments(
+  notebookId: string,
+): Promise<Result<Attachment[], AppError>> {
+  return call<Attachment[]>("get_attachments", { notebookId });
+}
+
+export async function uploadFile(
+  notebookId: string,
+): Promise<Result<Attachment, AppError>> {
+  return call<Attachment>("upload_file", { notebookId });
+}
+
+export async function deleteAttachment(
+  id: string,
+): Promise<Result<null, AppError>> {
+  return call<null>("delete_attachment", { id });
 }

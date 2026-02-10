@@ -1,11 +1,14 @@
 use anyhow::{Context, Result};
 use sqlx::sqlite::SqlitePoolOptions;
 
-use crate::db::{chat::ChatEntryRepository, notebooks::NotebookRepository};
+use crate::db::{
+    attachments::AttachmentRepository, chat::ChatEntryRepository, notebooks::NotebookRepository,
+};
 
 pub struct DBManager {
     notebooks_repository: NotebookRepository,
     chat_repository: ChatEntryRepository,
+    attachments_repository: AttachmentRepository,
 }
 
 impl DBManager {
@@ -24,11 +27,13 @@ impl DBManager {
 
         // I don't like cloning here but i don't know rust enough to think of anything else
         let notebooks = NotebookRepository::new(sqlite.clone());
+        let attachments = AttachmentRepository::new(sqlite.clone());
         let chats = ChatEntryRepository::new(sqlite);
 
         Ok(Self {
             notebooks_repository: notebooks,
             chat_repository: chats,
+            attachments_repository: attachments,
         })
     }
 
@@ -38,5 +43,9 @@ impl DBManager {
 
     pub fn get_chat_entry_repository(&self) -> &ChatEntryRepository {
         &self.chat_repository
+    }
+
+    pub fn get_attachments_repository(&self) -> &AttachmentRepository {
+        &self.attachments_repository
     }
 }
