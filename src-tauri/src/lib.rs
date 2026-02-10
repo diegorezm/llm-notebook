@@ -1,3 +1,5 @@
+use std::{fs::OpenOptions, path::Path};
+
 use tauri::Manager;
 
 use crate::{
@@ -14,9 +16,10 @@ mod state;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
+            tauri::async_runtime::block_on(async move {
                 let app_dir = handle
                     .path()
                     .app_data_dir()
@@ -24,10 +27,22 @@ pub fn run() {
 
                 std::fs::create_dir_all(&app_dir).expect("Could not create App Data directory");
 
-                let db_path = app_dir.join("library.lance");
-                let db_path_str = db_path.to_str().expect("Invalid path");
+                let lanced_db_path = app_dir.join("library.lance");
+                let lanced_db_path_string = lanced_db_path.to_str().expect("Invalid path");
 
-                let db_manager = DBManager::new(db_path_str)
+                let sqlite_db_path = app_dir.join("notebook.db");
+                if !sqlite_db_path.exists() {
+                    OpenOptions::new()
+                        .create_new(true)
+                        .write(true)
+                        .append(true)
+                        .open(sqlite_db_path.as_path())
+                        .unwrap();
+                }
+
+                let sqlite_db_path_string = sqlite_db_path.to_str().expect("Invalid path");
+
+                let db_manager = DBManager::new(lanced_db_path_string, sqlite_db_path_string)
                     .await
                     .expect("Failed to initialize DBManager");
 
