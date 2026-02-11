@@ -2,8 +2,10 @@ use crate::db::attachments::Attachment;
 use crate::db::chat::ChatEntry;
 use crate::db::notebooks::Notebook;
 use crate::state::AppState;
+use futures::TryFutureExt;
 use ollama_rs::generation::chat::MessageRole;
 use serde::Serialize;
+use tauri::async_runtime::Mutex;
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 
@@ -104,6 +106,13 @@ pub async fn upload_file(
 ) -> CommandResult<Attachment> {
     // 1. Open File Picker (blocking is fine in this async task)
     let file_path = app.dialog().file().blocking_pick_file();
+    let mut tx = state
+        .db
+        .begin_transaction()
+        .map_err(|e| CommandError {
+            reason: e.to_string(),
+        })
+        .await?;
 
     let path_buf = file_path.ok_or_else(|| CommandError {
         reason: "No file selected".to_string(),
@@ -139,8 +148,9 @@ pub async fn upload_file(
     let attachment = state
         .db
         .get_attachments_repository()
-        .create(
-            notebook_id,
+        .create_with_tx(
+            &mut tx,
+            notebook_id.clone(),
             file_name,
             path.to_string_lossy().to_string(),
             size,
@@ -151,19 +161,69 @@ pub async fn upload_file(
             reason: e.to_string(),
         })?;
 
+    let path_str = path.to_str().ok_or_else(|| {
+        CommandError {
+            reason: "Could not generate the embeddings for this file due to internal errors, please try to delete and upload it again.".to_string(),
+        }
+    })?;
+
+    let embedding_response = {
+        let mut model = state.embeddings_model.lock().await;
+
+        model
+            .generate_from_file(path_str, &notebook_id, &attachment.id)
+            .await
+    }
+    .map_err(|e| CommandError {
+        reason: e.to_string(),
+    })?;
+
+    state
+        .db
+        .get_embeddings_repository()
+        .add_document(embedding_response.batch)
+        .await?;
+
+    tx.commit().await.map_err(|e| CommandError {
+        reason: format!("Failed to commit database transaction: {}", e),
+    })?;
+
     Ok(attachment)
 }
 
 #[tauri::command]
 pub async fn delete_attachment(state: tauri::State<'_, AppState>, id: String) -> CommandResult<()> {
-    state
+    let mut tx = state
         .db
-        .get_attachments_repository()
-        .delete(&id)
-        .await
+        .begin_transaction()
         .map_err(|e| CommandError {
             reason: e.to_string(),
         })
+        .await?;
+
+    state
+        .db
+        .get_attachments_repository()
+        .delete_with_tx(&mut tx, &id.clone())
+        .await
+        .map_err(|e| CommandError {
+            reason: e.to_string(),
+        })?;
+
+    state
+        .db
+        .get_embeddings_repository()
+        .remove_document_embeddings(&id)
+        .await
+        .map_err(|e| CommandError {
+            reason: e.to_string(),
+        })?;
+
+    tx.commit().await.map_err(|e| CommandError {
+        reason: format!("Failed to commit database transaction: {}", e),
+    })?;
+
+    Ok(())
 }
 
 pub fn register_commands() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool {

@@ -1,9 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use anyhow::{Context, Result};
-use arrow_array::{
-    cast::AsArray, FixedSizeListArray, Float32Array, RecordBatch, RecordBatchIterator, StringArray,
-};
+use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
 use fastembed::TextEmbedding;
 
@@ -26,6 +24,8 @@ impl EmbedModel {
         let dim = 384;
 
         let schema = Arc::new(Schema::new(vec![
+            Field::new("attachment_id", DataType::Utf8, false),
+            Field::new("notebook_id", DataType::Utf8, false),
             Field::new("path", DataType::Utf8, false),
             Field::new("text", DataType::Utf8, false),
             Field::new(
@@ -37,22 +37,38 @@ impl EmbedModel {
         Ok(Self { model, schema })
     }
 
-    pub async fn generate_from_file(&mut self, file_path: String) -> Result<ProcessedDocument> {
-        let extension = std::path::Path::new(&file_path)
+    pub async fn generate_from_text(&mut self, query: &str) -> Result<Vec<f32>> {
+        let query_embeddings = self
+            .model
+            .embed(vec![query], None)
+            .context("There was an error while trying to generate embeddings from this query.")?;
+        let query_vector = query_embeddings[0].clone();
+        Ok(query_vector)
+    }
+
+    pub async fn generate_from_file(
+        &mut self,
+        file_path: &str,
+        notebook_id: &str,
+        attachment_id: &str,
+    ) -> Result<ProcessedDocument> {
+        let extension = std::path::Path::new(file_path)
             .extension()
             .and_then(|s| s.to_str())
             .unwrap_or("");
 
         let content = match extension.to_lowercase().as_str() {
-            "pdf" => self.extract_content_from_pdf(&file_path)?,
-            "md" | "txt" => self.extract_content_from_plain_text(&file_path)?,
+            "pdf" => self.extract_content_from_pdf(file_path)?,
+            "md" | "txt" => self.extract_content_from_plain_text(file_path)?,
             _ => anyhow::bail!("Unsupported file format: .{}", extension),
         };
 
-        let batch = self.generate_embeddings(&file_path, &content).await?;
+        let batch = self
+            .generate_embeddings(&file_path, &content, notebook_id, attachment_id)
+            .await?;
 
         Ok(ProcessedDocument {
-            path: file_path,
+            path: file_path.to_string(),
             raw_content: content,
             chunk_count: 0,
             batch: batch,
@@ -63,6 +79,8 @@ impl EmbedModel {
         &mut self,
         file_path: &str,
         file_content: &str,
+        notebook_id: &str,
+        attachment_id: &str,
     ) -> Result<RecordBatch> {
         let chunks: Vec<&str> = file_content
             .split("\n\n")
@@ -75,8 +93,10 @@ impl EmbedModel {
         let dim = vector.len() as i32;
 
         // Each chunk needs to know which file it came from.
+        //
         let path_array = StringArray::from(vec![file_path; chunks.len()]);
-        // Turns rust Vec<str> into a String array from arrow_array.
+        let nb_id_array = StringArray::from(vec![notebook_id; chunks.len()]);
+        let att_id_array = StringArray::from(vec![attachment_id; chunks.len()]);
         let text_array = StringArray::from(chunks);
 
         // Now we flat the embeddings into a continuos memory block.
@@ -96,6 +116,8 @@ impl EmbedModel {
         let batch = RecordBatch::try_new(
             self.schema.clone(),
             vec![
+                Arc::new(att_id_array),
+                Arc::new(nb_id_array),
                 Arc::new(path_array),
                 Arc::new(text_array),
                 Arc::new(vector_array),

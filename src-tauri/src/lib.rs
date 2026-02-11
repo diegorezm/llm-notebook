@@ -1,8 +1,11 @@
-use std::fs::OpenOptions;
+use std::{fs::OpenOptions, sync::Arc};
+use tauri::async_runtime::Mutex;
 
 use tauri::Manager;
 
-use crate::{commands::register_commands, db::db_manager::DBManager, state::AppState};
+use crate::{
+    ai::embeds::EmbedModel, commands::register_commands, db::db_manager::DBManager, state::AppState,
+};
 
 mod ai;
 mod commands;
@@ -42,7 +45,14 @@ pub fn run() {
                     .await
                     .expect("Failed to initialize DBManager");
 
-                handle.manage(AppState { db: db_manager });
+                let model = Arc::new(Mutex::new(
+                    EmbedModel::new().expect("Could not create the embed model."),
+                ));
+
+                handle.manage(AppState {
+                    db: db_manager,
+                    embeddings_model: model,
+                });
             });
             Ok(())
         })

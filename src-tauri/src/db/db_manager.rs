@@ -1,19 +1,24 @@
 use anyhow::{Context, Result};
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite, Transaction};
 
 use crate::db::{
-    attachments::AttachmentRepository, chat::ChatEntryRepository, notebooks::NotebookRepository,
+    attachments::AttachmentRepository, chat::ChatEntryRepository, embeddings::EmbeddingsRepository,
+    notebooks::NotebookRepository,
 };
 
 pub struct DBManager {
     notebooks_repository: NotebookRepository,
     chat_repository: ChatEntryRepository,
     attachments_repository: AttachmentRepository,
+    embeddings_repository: EmbeddingsRepository,
+    sqlite: Pool<Sqlite>,
 }
+
+pub type SqliteTransaction<'a> = sqlx::Transaction<'a, sqlx::Sqlite>;
 
 impl DBManager {
     pub async fn new(lanced_db_path: &str, sqlite_path: &str) -> Result<Self> {
-        let _conn = lancedb::connect(lanced_db_path)
+        let lancedb_conn = lancedb::connect(lanced_db_path)
             .execute()
             .await
             .context("Could not open the database file.")?;
@@ -28,12 +33,15 @@ impl DBManager {
         // I don't like cloning here but i don't know rust enough to think of anything else
         let notebooks = NotebookRepository::new(sqlite.clone());
         let attachments = AttachmentRepository::new(sqlite.clone());
-        let chats = ChatEntryRepository::new(sqlite);
+        let chats = ChatEntryRepository::new(sqlite.clone());
+        let emebddings = EmbeddingsRepository::new(lancedb_conn);
 
         Ok(Self {
             notebooks_repository: notebooks,
             chat_repository: chats,
             attachments_repository: attachments,
+            embeddings_repository: emebddings,
+            sqlite: sqlite,
         })
     }
 
@@ -47,5 +55,16 @@ impl DBManager {
 
     pub fn get_attachments_repository(&self) -> &AttachmentRepository {
         &self.attachments_repository
+    }
+
+    pub fn get_embeddings_repository(&self) -> &EmbeddingsRepository {
+        &self.embeddings_repository
+    }
+
+    pub async fn begin_transaction(&self) -> Result<SqliteTransaction<'_>> {
+        self.sqlite
+            .begin()
+            .await
+            .context("Failed to start a new database transaction")
     }
 }

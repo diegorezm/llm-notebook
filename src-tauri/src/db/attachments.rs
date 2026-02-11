@@ -24,8 +24,9 @@ impl AttachmentRepository {
     }
 
     /// Creates a new attachment record in the database
-    pub async fn create(
+    pub async fn create_with_tx(
         &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
         notebook_id: String,
         name: String,
         path: String,
@@ -53,7 +54,7 @@ impl AttachmentRepository {
         .bind(attachment.file_size)
         .bind(&attachment.file_type)
         .bind(attachment.created_at)
-        .execute(&self.pool)
+        .execute(&mut **tx)
         .await
         .context("Failed to create attachment record")?;
 
@@ -72,10 +73,14 @@ impl AttachmentRepository {
         Ok(files)
     }
 
-    pub async fn delete(&self, id: &str) -> Result<()> {
+    pub async fn delete_with_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        id: &str,
+    ) -> Result<()> {
         sqlx::query("DELETE FROM attachments WHERE id = ?")
             .bind(id)
-            .execute(&self.pool)
+            .execute(&mut **tx)
             .await
             .context("Failed to delete attachment")?;
         Ok(())
