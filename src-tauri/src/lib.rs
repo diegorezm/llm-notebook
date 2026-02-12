@@ -4,7 +4,10 @@ use tauri::async_runtime::Mutex;
 use tauri::Manager;
 
 use crate::{
-    ai::embeds::EmbedModel, commands::register_commands, db::db_manager::DBManager, state::AppState,
+    ai::{embeds::EmbedModel, llama::Model},
+    commands::register_commands,
+    db::db_manager::DBManager,
+    state::AppState,
 };
 
 mod ai;
@@ -41,17 +44,22 @@ pub fn run() {
 
                 let sqlite_db_path_string = sqlite_db_path.to_str().expect("Invalid path");
 
-                let db_manager = DBManager::new(lanced_db_path_string, sqlite_db_path_string)
-                    .await
-                    .expect("Failed to initialize DBManager");
+                let db_manager = Arc::new(
+                    DBManager::new(lanced_db_path_string, sqlite_db_path_string)
+                        .await
+                        .expect("Failed to initialize DBManager"),
+                );
 
                 let model = Arc::new(Mutex::new(
-                    EmbedModel::new().expect("Could not create the embed model."),
+                    EmbedModel::new(app_dir).expect("Could not create the embed model."),
                 ));
+
+                let chat_model = Arc::new(Mutex::new(Model::new("qwen3:4b")));
 
                 handle.manage(AppState {
                     db: db_manager,
                     embeddings_model: model,
+                    chat_model: chat_model,
                 });
             });
             Ok(())
