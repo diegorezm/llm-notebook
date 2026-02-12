@@ -18,6 +18,7 @@ export interface ChatEntry {
   timestamp: number;
 }
 
+export type ProcessingStatus = "pending" | "ready" | "error";
 export interface Attachment {
   id: string;
   notebookId: string;
@@ -25,6 +26,7 @@ export interface Attachment {
   file_path: string;
   file_size: number;
   file_type: string;
+  status: ProcessingStatus;
   created_at: number;
 }
 
@@ -91,4 +93,11 @@ export async function deleteAttachment(
   id: string,
 ): Promise<Result<null, AppError>> {
   return call<null>("delete_attachment", { id });
+}
+
+export async function chat(
+  notebookId: string,
+  message: string,
+): Promise<Result<string, AppError>> {
+  return call<string>("chat", { notebookId, message });
 }
