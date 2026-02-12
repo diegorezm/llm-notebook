@@ -1,4 +1,4 @@
-use crate::db::attachments::Attachment;
+use crate::db::attachments::{Attachment, AttachmentStatus};
 use crate::db::chat::ChatEntry;
 use crate::db::notebooks::Notebook;
 use crate::state::AppState;
@@ -6,10 +6,10 @@ use futures::TryFutureExt;
 use ollama_rs::generation::chat::MessageRole;
 use serde::Serialize;
 use tauri::async_runtime::Mutex;
-use tauri::State;
+use tauri::{Emitter, State};
 use tauri_plugin_dialog::DialogExt;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CommandError {
     pub reason: String,
@@ -52,20 +52,6 @@ pub async fn delete_notebook(state: State<'_, AppState>, notebook_id: String) ->
         .db
         .get_notebooks_repository()
         .delete(&notebook_id)
-        .await
-        .map_err(Into::into)
-}
-
-#[tauri::command]
-pub async fn send_message(
-    state: State<'_, AppState>,
-    notebook_id: String,
-    message: String,
-) -> CommandResult<ChatEntry> {
-    state
-        .db
-        .get_chat_entry_repository()
-        .create(notebook_id, MessageRole::User, message)
         .await
         .map_err(Into::into)
 }
@@ -161,34 +147,115 @@ pub async fn upload_file(
             reason: e.to_string(),
         })?;
 
-    let path_str = path.to_str().ok_or_else(|| {
-        CommandError {
-            reason: "Could not generate the embeddings for this file due to internal errors, please try to delete and upload it again.".to_string(),
+    let app_handle = app.clone();
+    let state_owned: AppState = state.inner().clone();
+    let attachment_id = attachment.id.clone();
+    let notebook_id = notebook_id.clone();
+    let path_string = path.to_str().map(|s| s.to_string());
+
+    tauri::async_runtime::spawn(async move {
+        app_handle.emit("processing-start", &attachment_id).ok();
+
+        let path_str = match path_string {
+            Some(ref s) => s,
+            None => return,
+        };
+
+        let result: Result<(), anyhow::Error> = async {
+            let batch = {
+                let mut model = state_owned.embeddings_model.lock().await;
+                model
+                    .generate_from_file(path_str, &notebook_id, &attachment_id)
+                    .await?
+                    .batch
+            };
+
+            state_owned
+                .db
+                .get_embeddings_repository()
+                .add_document(batch)
+                .await?;
+
+            state_owned
+                .db
+                .get_attachments_repository()
+                .update_status(&attachment_id, AttachmentStatus::Ready)
+                .await?;
+
+            Ok(())
         }
-    })?;
+        .await;
 
-    let embedding_response = {
-        let mut model = state.embeddings_model.lock().await;
-
-        model
-            .generate_from_file(path_str, &notebook_id, &attachment.id)
-            .await
-    }
-    .map_err(|e| CommandError {
-        reason: e.to_string(),
-    })?;
-
-    state
-        .db
-        .get_embeddings_repository()
-        .add_document(embedding_response.batch)
-        .await?;
+        match result {
+            Ok(_) => {
+                app_handle
+                    .emit("processing-success", &attachment_id)
+                    .unwrap();
+            }
+            Err(e) => {
+                eprintln!("Job failed: {}", e);
+                state_owned
+                    .db
+                    .get_attachments_repository()
+                    .update_status(&attachment_id, AttachmentStatus::Error)
+                    .await
+                    .ok();
+                app_handle
+                    .emit(
+                        "processing-error",
+                        CommandError {
+                            reason: "Something went wron.".to_string(),
+                        },
+                    )
+                    .unwrap();
+            }
+        }
+    });
 
     tx.commit().await.map_err(|e| CommandError {
         reason: format!("Failed to commit database transaction: {}", e),
     })?;
 
     Ok(attachment)
+}
+
+#[tauri::command]
+pub async fn chat(
+    state: tauri::State<'_, AppState>,
+    notebook_id: String,
+    message: String,
+) -> CommandResult<String> {
+    let query_message_batch = {
+        let mut model = state.embeddings_model.lock().await;
+        model.generate_from_text(&message).await?
+    };
+
+    let embedding_response = state
+        .db
+        .get_embeddings_repository()
+        .search(&notebook_id.clone(), query_message_batch, 5)
+        .await?;
+
+    state
+        .db
+        .get_chat_entry_repository()
+        .create(&notebook_id.clone(), MessageRole::User, message.clone())
+        .await?;
+
+    let response = state
+        .chat_model
+        .lock()
+        .await
+        .chat(&message, embedding_response)
+        .await?;
+
+    let r = state
+        .db
+        .get_chat_entry_repository()
+        .create(&notebook_id, MessageRole::Assistant, response)
+        .await?;
+
+    Ok(r.message)
 }
 
 #[tauri::command]
@@ -231,10 +298,10 @@ pub fn register_commands() -> impl Fn(tauri::ipc::Invoke<tauri::Wry>) -> bool {
         create_notebook,
         get_notebooks,
         delete_notebook,
-        send_message,
         get_chat_history,
         get_attachments,
         upload_file,
-        delete_attachment
+        delete_attachment,
+        chat
     ]
 }
