@@ -56,6 +56,13 @@ pub fn run() {
 
                 let chat_model = Arc::new(Mutex::new(Model::new("qwen3:4b")));
 
+                chat_model
+                    .lock()
+                    .await
+                    .inject_system_prompt()
+                    .await
+                    .unwrap();
+
                 handle.manage(AppState {
                     db: db_manager,
                     embeddings_model: model,
