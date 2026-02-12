@@ -1,12 +1,22 @@
-import { Component, createSignal, createResource, For, Show } from "solid-js";
-import { ArrowLeft, Plus, FileText, CloudUpload, Trash2 } from "lucide-solid";
+import {
+  Component,
+  createSignal,
+  createResource,
+  For,
+  Show,
+  onMount,
+  onCleanup,
+} from "solid-js";
+import { ArrowLeft, FileText, CloudUpload, Trash2 } from "lucide-solid";
 import { A, useParams } from "@solidjs/router";
 import {
   getAttachments,
   uploadFile,
   deleteAttachment,
+  ProcessingStatus,
 } from "../../lib/commands";
 import { showToast } from "../../lib/toast";
+import { listen } from "@tauri-apps/api/event";
 
 export const ResizableSidebar: Component = () => {
   const params = useParams<{ id: string }>();
@@ -47,6 +57,10 @@ export const ResizableSidebar: Component = () => {
 };
 
 const FileSidebar: Component<{ notebookId: string }> = (props) => {
+  const [processingMap, setProcessingMap] = createSignal<
+    Record<string, ProcessingStatus>
+  >({});
+
   // Fetch attachments from SQLite
   const [attachments, { refetch }] = createResource(
     () => props.notebookId,
@@ -58,14 +72,45 @@ const FileSidebar: Component<{ notebookId: string }> = (props) => {
     },
   );
 
+  onMount(async () => {
+    const unlistenStart = await listen<string>("processing-start", (event) => {
+      setProcessingMap((prev) => ({ ...prev, [event.payload]: "pending" }));
+    });
+
+    const unlistenSuccess = await listen<string>(
+      "processing-success",
+      (event) => {
+        setProcessingMap((prev) => ({ ...prev, [event.payload]: "ready" }));
+        refetch();
+      },
+    );
+
+    const unlistenError = await listen<{ id: string; reason: string }>(
+      "processing-error",
+      (event) => {
+        setProcessingMap((prev) => ({ ...prev, [event.payload.id]: "error" }));
+        showToast({ message: `Failed to process file`, type: "error" });
+      },
+    );
+
+    onCleanup(() => {
+      unlistenStart();
+      unlistenSuccess();
+      unlistenError();
+    });
+  });
+
   const handleUpload = async () => {
     const [err, file] = await uploadFile(props.notebookId);
+
     if (err) {
       if (err.reason !== "No file selected") {
         showToast({ message: err.reason, type: "error" });
       }
       return;
     }
+
+    setProcessingMap((prev) => ({ ...prev, [file.id]: "pending" }));
     showToast({ message: `Uploaded ${file!.file_name}`, type: "success" });
     refetch();
   };
@@ -104,6 +149,7 @@ const FileSidebar: Component<{ notebookId: string }> = (props) => {
             {(file) => (
               <FileItem
                 name={file.file_name}
+                status={processingMap()[file.id] ?? file.status}
                 onDelete={() => handleDelete(file.id, file.file_name)}
               />
             )}
@@ -129,12 +175,28 @@ const FileSidebar: Component<{ notebookId: string }> = (props) => {
   );
 };
 
-const FileItem: Component<{ name: string; onDelete: () => void }> = (props) => (
+const FileItem: Component<{
+  name: string;
+  status: ProcessingStatus;
+  onDelete: () => void;
+}> = (props) => (
   <div class="flex items-center gap-3 p-2 rounded-sm hover:bg-zinc-800/50 cursor-pointer group transition-colors">
     <FileText size={14} class="text-zinc-600 group-hover:text-zinc-300" />
     <span class="text-xs text-zinc-400 group-hover:text-zinc-200 truncate flex-1">
       {props.name}
     </span>
+
+    <Show when={props.status === "pending"}>
+      <span class="text-[9px] uppercase tracking-widest text-yellow-600 animate-pulse">
+        Processing
+      </span>
+    </Show>
+    <Show when={props.status === "error"}>
+      <span class="text-[9px] uppercase tracking-widest text-red-500">
+        Failed
+      </span>
+    </Show>
+
     <button
       onClick={(e) => {
         e.stopPropagation();
