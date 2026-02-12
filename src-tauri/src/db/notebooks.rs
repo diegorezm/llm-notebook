@@ -11,6 +11,7 @@ pub struct Notebook {
     pub last_accessed: i64,
 }
 
+#[derive(Clone)]
 pub struct NotebookRepository {
     pool: SqlitePool,
 }
