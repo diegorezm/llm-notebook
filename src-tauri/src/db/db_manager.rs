@@ -6,6 +6,7 @@ use crate::db::{
     notebooks::NotebookRepository,
 };
 
+#[derive(Clone)]
 pub struct DBManager {
     notebooks_repository: NotebookRepository,
     chat_repository: ChatEntryRepository,
@@ -13,6 +14,8 @@ pub struct DBManager {
     embeddings_repository: EmbeddingsRepository,
     sqlite: Pool<Sqlite>,
 }
+
+impl DBManager {}
 
 pub type SqliteTransaction<'a> = sqlx::Transaction<'a, sqlx::Sqlite>;
 
