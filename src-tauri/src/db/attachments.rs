@@ -11,9 +11,17 @@ pub struct Attachment {
     pub file_path: String,
     pub file_size: i64,
     pub file_type: String,
+    pub status: String,
     pub created_at: i64,
 }
 
+pub enum AttachmentStatus {
+    Pending,
+    Ready,
+    Error,
+}
+
+#[derive(Clone)]
 pub struct AttachmentRepository {
     pool: SqlitePool,
 }
@@ -40,12 +48,13 @@ impl AttachmentRepository {
             file_path: path,
             file_size: size,
             file_type: mime,
+            status: "pending".to_string(),
             created_at: chrono::Utc::now().timestamp(),
         };
 
         sqlx::query(
-            "INSERT INTO attachments (id, notebook_id, file_name, file_path, file_size, file_type, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO attachments (id, notebook_id, file_name, file_path, file_size, file_type, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&attachment.id)
         .bind(&attachment.notebook_id)
@@ -53,6 +62,7 @@ impl AttachmentRepository {
         .bind(&attachment.file_path)
         .bind(attachment.file_size)
         .bind(&attachment.file_type)
+        .bind(&attachment.status)
         .bind(attachment.created_at)
         .execute(&mut **tx)
         .await
@@ -83,6 +93,21 @@ impl AttachmentRepository {
             .execute(&mut **tx)
             .await
             .context("Failed to delete attachment")?;
+        Ok(())
+    }
+
+    pub async fn update_status(&self, attachment_id: &str, status: AttachmentStatus) -> Result<()> {
+        let status = match status {
+            AttachmentStatus::Pending => "pending",
+            AttachmentStatus::Ready => "ready",
+            AttachmentStatus::Error => "error",
+        };
+        sqlx::query("UPDATE attachments SET status = ? WHERE id = ?")
+            .bind(status)
+            .bind(attachment_id)
+            .execute(&self.pool)
+            .await
+            .context("Failed to update this attachment status.")?;
         Ok(())
     }
 }
