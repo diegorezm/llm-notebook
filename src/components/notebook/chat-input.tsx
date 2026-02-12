@@ -1,9 +1,10 @@
 import { Component, createSignal } from "solid-js";
 import { Send, Paperclip } from "lucide-solid";
 
-export const ChatInput: Component<{ onSend: (msg: string) => void }> = (
-  props,
-) => {
+export const ChatInput: Component<{
+  onSend: (msg: string) => void;
+  disabled: boolean;
+}> = (props) => {
   const [text, setText] = createSignal("");
 
   const submit = () => {
@@ -31,6 +32,7 @@ export const ChatInput: Component<{ onSend: (msg: string) => void }> = (
           <button
             onClick={submit}
             class="p-1.5 bg-zinc-100 text-black rounded-sm hover:bg-white transition-colors"
+            disabled={props.disabled}
           >
             <Send size={18} />
           </button>
