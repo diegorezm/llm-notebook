@@ -15,6 +15,7 @@ pub struct ChatEntry {
     pub timestamp: i64,
 }
 
+#[derive(Clone)]
 pub struct ChatEntryRepository {
     pool: SqlitePool,
 }
@@ -26,7 +27,7 @@ impl ChatEntryRepository {
 
     pub async fn create(
         &self,
-        notebook_id: String,
+        notebook_id: &str,
         role: MessageRole,
         message: String,
     ) -> Result<ChatEntry> {
@@ -56,7 +57,7 @@ impl ChatEntryRepository {
 
         Ok(ChatEntry {
             id,
-            notebook_id,
+            notebook_id: notebook_id.to_string(),
             role: role_str.to_string(),
             message,
             timestamp: now,
