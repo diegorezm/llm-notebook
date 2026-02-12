@@ -1,9 +1,12 @@
-use std::{path::Path, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::{Context, Result};
 use arrow_array::{FixedSizeListArray, Float32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
-use fastembed::TextEmbedding;
+use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
 
 pub struct EmbedModel {
     model: TextEmbedding,
@@ -17,12 +20,18 @@ pub struct ProcessedDocument {
     pub batch: RecordBatch,
 }
 
-impl EmbedModel {
-    pub fn new() -> Result<Self> {
-        let model = TextEmbedding::try_new(Default::default())
-            .context("Failed to initialize FastEmbed model.")?;
-        let dim = 384;
+const BATCH_SIZE: usize = 32;
 
+impl EmbedModel {
+    pub fn new(app_data_dir: PathBuf) -> Result<Self> {
+        let cache_dir = app_data_dir.join("fastembed_cache");
+
+        let options = InitOptions::new(EmbeddingModel::AllMiniLML6V2).with_cache_dir(cache_dir);
+
+        let model =
+            TextEmbedding::try_new(options).context("Failed to initialize FastEmbed model.")?;
+
+        let dim = 384;
         let schema = Arc::new(Schema::new(vec![
             Field::new("attachment_id", DataType::Utf8, false),
             Field::new("notebook_id", DataType::Utf8, false),
@@ -34,6 +43,7 @@ impl EmbedModel {
                 true,
             ),
         ]));
+
         Ok(Self { model, schema })
     }
 
@@ -87,7 +97,10 @@ impl EmbedModel {
             .filter(|s| !s.trim().is_empty())
             .collect();
 
-        let embeddings = self.model.embed(chunks.clone(), None)?;
+        let embeddings: Vec<Vec<f32>> = chunks
+            .chunks(BATCH_SIZE)
+            .flat_map(|batch| self.model.embed(batch.to_vec(), None).unwrap())
+            .collect();
 
         let vector = embeddings[0].clone();
         let dim = vector.len() as i32;
