@@ -72,7 +72,7 @@ Keep this running in a separate terminal.
 
 ```bash
 git clone https://github.com/diegorezm/llm-notebook.git
-cd ollama-notebook
+cd llm-notebook
 ```
 
 ---
