@@ -54,7 +54,7 @@ pub fn run() {
                     EmbedModel::new(app_dir).expect("Could not create the embed model."),
                 ));
 
-                let chat_model = Arc::new(Mutex::new(Model::new("phi4-mini")));
+                let chat_model = Arc::new(Mutex::new(Model::new("qwen3.5:0.8b")));
 
                 chat_model
                     .lock()
