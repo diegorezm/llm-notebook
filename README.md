@@ -1,5 +1,7 @@
 # Ollama Notebook
 
+![Demonstration of the app](demo.png) 
+
 Ask AI about your documents for free and locally!
 
 This project was made for people who want to use RAG systems without uploading their documents to third-party services like Google.
