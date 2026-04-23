@@ -4,6 +4,7 @@ import { Route, Router } from "@solidjs/router";
 import { HomeRoute } from "./routes/home";
 import { AppLayout } from "./components/layouts/app-layout";
 import { NotebookRoute } from "./routes/notebook";
+import { NotFoundRoute } from "./routes/not-found";
 
 const wrapper = document.getElementById("root");
 
@@ -17,7 +18,7 @@ render(
       <Route path="/" component={AppLayout}>
         <Route path="/" component={HomeRoute} />
         <Route path="/notebook/:id" component={NotebookRoute} />
-        <Route path="*param" component={() => <div>Not Found</div>} />
+        <Route path="*param" component={NotFoundRoute} />
       </Route>
     </Router>
   ),
